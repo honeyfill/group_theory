@@ -1,0 +1,114 @@
+\import Algebra.Monoid
+\import Data.Bool
+\import Data.Fin
+\import Equiv.Univalence
+\import Logic
+\import Meta
+\import Paths
+\import definition
+\import Equiv
+
+\func mult (x y : Fin 2) : Fin 2 \elim x
+  | 0 => y
+  | 1 => \case \elim y \with {
+    | 0 => 1
+    | 1 => 0
+  }
+
+\func mult-assos {x y z : Fin 2} : mult (mult x y) z = mult x (mult y z) \elim x, y, z
+  | 0, 0, 0 => idp
+  | 0, 0, 1 => idp
+  | 0, 1, 0 => idp
+  | 0, 1, 1 => idp
+  | 1, 0, 0 => idp
+  | 1, 0, 1 => idp
+  | 1, 1, 0 => idp
+  | 1, 1, 1 => idp
+
+\func inverse (x : Fin 2) : Fin 2 => x
+
+\instance two-FinGroup : FinGroup
+  | E => Fin 2
+  | ide => 0
+  | * => mult
+  | ide-left => idp
+  | ide-right {x : Fin 2} => cases x \with {
+    | 0 => idp
+    | 1 => idp
+  }
+  | *-assoc => mult-assos
+  | inverse => inverse
+  | inverse-left {x : Fin 2} => cases x \with {
+    | 0 => idp
+    | 1 => idp
+  }
+  | inverse-right {x : Fin 2} => cases x \with {
+    | 0 => idp
+    | 1 => idp
+  }
+  | finCard => 2
+  | finEq => inP idp
+
+\data Unit | unit
+
+\func PredicateIn (x : two-FinGroup) : \Type \elim x
+  | 0 => Unit
+  | 1 => Empty
+
+\func cont-comp {x y : two-FinGroup} (f : PredicateIn x) (g : PredicateIn y) : PredicateIn (x * inverse y) \elim x, y
+  | 0, 0 => f
+  | 0, 1 => g
+  | 1, 0 => f
+  | 1, 1 => absurd f
+
+\func PredToFin1 (x : \Sigma (p : two-FinGroup) (PredicateIn p)) : Fin 1 \elim x
+  | (p, p1) => \case p1 \with {
+    | Unit => 0
+  }
+
+\func Fin1ToPred (x : Fin 1) : \Sigma (x : two-FinGroup) (PredicateIn x) \elim x
+  | 0 => (0, unit)
+
+\func mini-helper (x : \Sigma (p : two-FinGroup) (PredicateIn p)) : x = (0, unit) => {?}
+
+\instance two-sub-eq : QEquiv => \new QEquiv {
+  | A => \Sigma (p : two-FinGroup) (PredicateIn p)
+  | B => Fin 1
+  | f => PredToFin1
+  | ret => Fin1ToPred
+  | ret_f x => inv (mini-helper x)
+  | f_sec x => \case \elim x \with {
+    | 0 => idp
+  }
+}
+
+\instance two-FinSubGroup : FinSubGroup two-FinGroup PredicateIn
+  | contains-ide => unit
+  | contains-comp => cont-comp
+  | subgroupOrder => 1
+  | EqFin => QEquiv-to-= two-sub-eq
+
+\func Fin2Set (x : two-FinGroup) : Bool \elim x
+  | 0 => true
+  | fsuc 0 => false
+
+\func invFin2Set (x : Bool) : two-FinGroup \elim x
+  | true => 0
+  | false => fsuc 0
+
+\instance Fin2Bool : QEquiv => \new QEquiv {
+  | A => two-FinGroup
+  | B => Bool
+  | f => Fin2Set
+  | ret => invFin2Set
+  | ret_f x => \case \elim x \with {
+    | 0 => idp
+    | 1 => idp
+  }
+  | f_sec x => \case \elim x \with {
+    | true => idp
+    | false => idp
+  }
+}
+
+\func fin2EqBool : two-FinGroup = {\Set} Bool => QEquiv-to-= Fin2Bool
