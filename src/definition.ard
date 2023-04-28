@@ -1,18 +1,93 @@
 \import Algebra.Group
 \import Algebra.Monoid
 \import Algebra.Pointed
+\import Arith.Prime
 \import Data.Bool
-\import Function.Meta
+\import Data.Fin
+\import Function
+\import Function.Meta \hiding (#)
 \import Logic
+\import Meta
 \import Paths
 \import Paths.Meta
+\import Prelude
+\import Set
 \import Set.Fin
-\import Arith.Prime
 
-\class FinGroup \noclassifying \extends Group, FinSet {
+\data Unit | unit
+
+
+\class DecGroup \extends Group, DecSet {
+}
+
+\data Decide (A : \Type)
+  | yes A
+  | no (A -> Empty)
+
+\func DecEq (A : \Type) => \Pi (a a' : A) -> Decide (a = a')
+
+\class Eq (A : \Type) {
+  | decideEq : DecEq A
+
+  \func \infix 4 == (a a' : A) : Bool => \case decideEq a a' \with {
+    | yes _ => true
+    | no _ => false
+  }
+}
+
+\func fsuc/=0 {n : Nat }{m : Fin n} (p : fsuc m = 0) : Empty => {?}
+
+\instance FinEq {n : Nat} : Eq (Fin (suc n))
+  | decideEq => decideEq
+  \where \func decideEq {n : Nat} (x y : Fin (suc n)) : Decide (x = y) \elim n, x, y
+    | Prelude.Nat.suc n1, 0, 0 => yes idp
+    | Prelude.Nat.suc n1, 0, suc y => no (\lam p => fsuc/=0 (inv p))
+    | Prelude.Nat.suc n1, suc x, 0 => no fsuc/=0
+    | Prelude.Nat.suc n1, fsuc x, fsuc y => \case decideEq x y \with {
+      | yes a => yes (pmap fsuc a)
+      | no _x => no (\lam p => _x (pmap FinSet.pred p))
+    }
+    | 0, x, y => yes (\case \elim x \with {
+      | 0 => \case \elim y \with {
+        | 0 => idp
+      }
+    })
+
+\func fin0 : Fin 3 => 0
+\func fin1 : Fin 3 => 1
+\func fin2 : Fin 3 => 2
+
+\func test1 : fin0 FinEq.== fin0 = true => idp
+\func test2 : fin0 FinEq.== fin1 = false => idp
+
+\class FinGroup \extends Group, FinSet {
   | groupOrder : Nat
   | groupOrder => finCard
+
+  \func struct : DecGroup \cowith
+    | E => E
+    | ide => ide
+    | * => *
+    | ide-left => ide-left
+    | ide-right => ide-right
+    | *-assoc => *-assoc
+    | inverse => inverse
+    | inverse-left => inverse-left
+    | inverse-right => inverse-right
+    | #-comparison => {?}
+    | tightness => {?}
+    | decideEq => {?}
 }
+
+\func periodic_point {A : \Type} (f : A -> A) (n : Nat) (x : A) => iterr f n x = x
+
+-- это аналог decToBool, но чтобы пользоваться decToBool нужно доказать, что FinGroup это Dec
+\func g-eq (G : FinGroup) (g h : G) : Bool => {?}
+
+\func count_order (G : FinGroup) (g : G.E) : Nat => helper G.groupOrder g g 1
+    \where \func helper (fuel : Nat) (g : G.E) (acc-g : G.E) (ans : Nat) : Nat \elim fuel
+      | 0 => ans
+      | suc t => if (g-eq G g G.ide) ans (helper t g (acc-g G.* g) (suc ans))
 
 \class FinSubGroup \noclassifying (G : FinGroup) {
   | P : G -> \Prop
@@ -43,9 +118,8 @@
 }
 
 \class CyclicFinGroup \extends FinGroup {
-  | is-cyclic : \Sigma (g : FinGroup.E) (\Sigma (n : Nat) (\Pi (h : FinGroup.E) -> Group.pow g n = h))
+  | is-cyclic : TruncP (\Sigma (g : FinGroup.E) (\Pi (h : FinGroup.E) -> \Sigma (n : Nat) (Group.pow g n = h)))
 }
-
 
 \func \infix 9 ^ (k n : Nat) : Nat \elim n
   | 0 => 1
@@ -80,11 +154,13 @@
 
   4. Hom is defined as usual.
 
-  4. Factorization. Also we need left and right cosets. They are defined like in the book.
+  4. Factorization. Also we need left and right cosets. They are defined like in the book. TODO: пока что пропустить(!)
+    TODO: Как в лине формулируется разбиение группы на косеты и разбиение множества на орбиты по действию?
 
-  5. Center of the group.
+  5. Center of the group. TODO: Определить в первую очередь
 
-  6. Normal subgroup. Each subgroup of the center is normal.
+  6. Normal subgroup. Each subgroup of the center is normal. TODO: посмотреть в лине фактор-группы перед этим
+    TODO: посмотреть TruncS (или как-то так)
     Page 6 here: https://tqft.net/web/notes/load.php?name=students/20180219-MitchRowett-ASC-report-on-Lean
 
   7. Canonical map G -> G / H.
@@ -101,3 +177,14 @@
     | true => suc $ count (\lam x => f (suc x))
     | false => count (\lam x => f (suc x))
   }
+
+\class LeftActionGroup \noclassifying (G : FinGroup) (S : FinSet) {
+  | action : G.E -> S.E -> S.E
+  | action-ide {e : S.E} : action G.ide e = e
+  | action-hom {x y : G.E} {e : S.E} : action (x * y) e = action x (action y e)
+  }
+
+\instance OnItSelf {G : FinGroup} : LeftActionGroup G G
+  | action => G.*
+  | action-ide => G.ide-left
+  | action-hom => G.*-assoc
