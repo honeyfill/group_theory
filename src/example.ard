@@ -82,6 +82,8 @@
   }
 }
 
+\func test1 : count_order two-FinGroup two-FinGroup.ide = 1 => {?}
+
 \instance two-FinSubGroup : FinSubGroup two-FinGroup PredicateIn
   | contains-ide => unit
   | contains-comp => cont-comp

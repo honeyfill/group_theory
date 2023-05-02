@@ -1,18 +1,25 @@
 \import Algebra.Group
 \import Algebra.Monoid
 \import Algebra.Pointed
+\import Arith.Nat
 \import Arith.Prime
 \import Data.Bool
 \import Data.Fin
+\import Data.Or
+\import Equiv (QEquiv)
+\import Equiv.Univalence
 \import Function
 \import Function.Meta \hiding (#)
 \import Logic
+\import Logic.Meta
 \import Meta
+\import Order.PartialOrder
+\import Order.StrictOrder
 \import Paths
 \import Paths.Meta
-\import Prelude
 \import Set
 \import Set.Fin
+\import Logic
 
 \data Unit | unit
 
@@ -20,38 +27,16 @@
 \class DecGroup \extends Group, DecSet {
 }
 
-\data Decide (A : \Type)
-  | yes A
-  | no (A -> Empty)
-
-\func DecEq (A : \Type) => \Pi (a a' : A) -> Decide (a = a')
-
-\class Eq (A : \Type) {
-  | decideEq : DecEq A
-
-  \func \infix 4 == (a a' : A) : Bool => \case decideEq a a' \with {
-    | yes _ => true
-    | no _ => false
-  }
-}
-
-\func fsuc/=0 {n : Nat }{m : Fin n} (p : fsuc m = 0) : Empty => {?}
-
-\instance FinEq {n : Nat} : Eq (Fin (suc n))
+\instance FinEq {n : Nat} : DecSet (Fin n)
   | decideEq => decideEq
-  \where \func decideEq {n : Nat} (x y : Fin (suc n)) : Decide (x = y) \elim n, x, y
-    | Prelude.Nat.suc n1, 0, 0 => yes idp
-    | Prelude.Nat.suc n1, 0, suc y => no (\lam p => fsuc/=0 (inv p))
-    | Prelude.Nat.suc n1, suc x, 0 => no fsuc/=0
-    | Prelude.Nat.suc n1, fsuc x, fsuc y => \case decideEq x y \with {
-      | yes a => yes (pmap fsuc a)
-      | no _x => no (\lam p => _x (pmap FinSet.pred p))
+  \where \func decideEq {n : Nat} (x y : Fin n) : Dec (x = y) \elim n, x, y
+    | suc n1, 0, 0 => Dec.yes idp
+    | suc n1, 0, suc y => Dec.no contradiction
+    | suc n1, suc x, 0 => Dec.no contradiction
+    | suc n1, suc x, suc y => \case decideEq x y \with {
+      | yes e => Dec.yes (pmap fsuc e)
+      | no n2 => Dec.no (\lam p => n2 (FinSet.suc-isInj x y p))
     }
-    | 0, x, y => yes (\case \elim x \with {
-      | 0 => \case \elim y \with {
-        | 0 => idp
-      }
-    })
 
 \func fin0 : Fin 3 => 0
 \func fin1 : Fin 3 => 1
@@ -74,20 +59,70 @@
     | inverse => inverse
     | inverse-left => inverse-left
     | inverse-right => inverse-right
-    | #-comparison => {?}
-    | tightness => {?}
-    | decideEq => {?}
+    | decideEq x y => \case finEq \with {
+      | inP a =>
+        \let
+          | q-equiv : QEquiv => =-to-Equiv {E} {Fin groupOrder} a
+        \in
+        \case FinEq.decideEq (q-equiv.f x) (q-equiv.f y) \with {
+          | Dec.yes a1 => Dec.yes (q-equiv.isInj a1)
+          | Dec.no _x => Dec.no (\lam t => _x (pmap q-equiv.f t))
+        }
+    }
 }
 
-\func periodic_point {A : \Type} (f : A -> A) (n : Nat) (x : A) => iterr f n x = x
+\func nott (x : Bool) => not x
 
--- это аналог decToBool, но чтобы пользоваться decToBool нужно доказать, что FinGroup это Dec
-\func g-eq (G : FinGroup) (g h : G) : Bool => {?}
+\func periodic_point {A : \Set} (f : A -> A) (n : Nat) (x : A) : \Prop => iterr f n x = x
+
+\func order_e (G : Group) (e : G.E) (n : Nat) : \Prop =>
+  \Sigma (periodic_point (G.* e) n e) (\Pi {m : Nat} (periodic_point (G.* e) m e) -> m >= n)
+
+\func order_is_periodic {G : FinGroup} {e : G.E} : periodic_point (G.* e) (count_order G e) e =>
+ unfold (periodic_point, count_order) (unfold {?})
+
+\func order-is-order (G : FinGroup) (e : G.E) : order_e G e (count_order G e) =>
+  (order_is_periodic, {?})
+
+\func periodic_points {A : \Set} (f : A -> A) : \Set => \Sigma (x : A) (n : Nat) (periodic_point f n x)
+
+-- \func nat_find {A : \Set} (ex : \Sigma )
+
+\func minimal_period {A : \Set} (f : A -> A) (x : A) => {?}
+
+\func test12 : periodic_point (\lam x => not x) 2 true => idp
 
 \func count_order (G : FinGroup) (g : G.E) : Nat => helper G.groupOrder g g 1
-    \where \func helper (fuel : Nat) (g : G.E) (acc-g : G.E) (ans : Nat) : Nat \elim fuel
-      | 0 => ans
-      | suc t => if (g-eq G g G.ide) ans (helper t g (acc-g G.* g) (suc ans))
+  \where {
+      \func helper (fuel : Nat) (g : G.E) (acc-g : G.E) (ans : Nat) : Nat \elim fuel
+        | 0 => ans
+        | suc t => \case decToBool (G.struct.decideEq G.ide acc-g) \with {
+          | false => helper t g (acc-g G.* g) (suc ans)
+          | true => ans
+        }
+    \func helper-gt-zero (fuel : Nat) (g acc-g : G.E) (ans : Nat) (p : ans > 0) : helper fuel g acc-g ans > 0
+      \elim fuel
+        | 0 => p
+        | suc t => \case decToBool (G.struct.decideEq G.ide acc-g) \as b \return
+            (\case b \with {
+              | false => helper t g (acc-g G.* g) (suc ans)
+              | true => ans
+            }) > 0 \with {
+          | false => helper-gt-zero t g (acc-g G.* g) (suc ans) NatSemiring.zero<suc
+          | true => p
+        }
+
+    \func helper-is-order (fuel : Nat) (g acc-g : G.E) (ans : Nat) : G.pow g (helper fuel g acc-g ans) = G.ide => {?}
+  }
+
+\func count_order-gt-zero {G : FinGroup} {g : G.E} : count_order G g > 0 =>
+  count_order.helper-gt-zero G G.groupOrder g g 1 NatSemiring.zero<suc
+
+\func count_order-is-order (G : FinGroup) (g : G.E) : G.pow g (count_order G g) = G.ide =>
+  unfold count_order (count_order.helper-is-order G G.groupOrder g g 1)
+
+\func is-order (G : FinGroup) (g : G.E) (n : Nat) : \Prop =>
+  \Sigma (G.pow g n = G.ide) (\Pi (m : Nat) (G.pow g m = G.ide) -> m >= n)
 
 \class FinSubGroup \noclassifying (G : FinGroup) {
   | P : G -> \Prop
@@ -126,8 +161,9 @@
   | suc t => k Nat.* (k ^ t)
 
 \class PGroup \extends FinGroup {
-  | is_p_group {k n : Nat} {p : isPrime k = true} :
-    \Pi (g : FinGroup.E) -> \Sigma (k : Nat) (Group.pow g (k ^ n) = Group.ide)
+  | p : Nat
+  | p-prime : isPrime p = true
+  | is-p-group : \Pi (g : FinGroup.E) -> \Sigma (n : Nat) (Group.pow g (p ^ n) = Group.ide)
 }
 
 \class HomG {G H : FinGroup} (f : G -> H) {
@@ -178,13 +214,15 @@
     | false => count (\lam x => f (suc x))
   }
 
-\class LeftActionGroup \noclassifying (G : FinGroup) (S : FinSet) {
-  | action : G.E -> S.E -> S.E
-  | action-ide {e : S.E} : action G.ide e = e
-  | action-hom {x y : G.E} {e : S.E} : action (x * y) e = action x (action y e)
+\class SetWithGroupAction (G : FinGroup) (\classifying S : FinSet) {
+  | action : G.E -> S -> S
+  | action-ide {e : S} : action G.ide e = e
+  | action-hom {x y : G.E} {e : S} : action (x * y) e = action x (action y e)
   }
 
-\instance OnItSelf {G : FinGroup} : LeftActionGroup G G
+{-
+\instance OnItSelf {G : FinGroup} : SetWithGroupAction G G
   | action => G.*
   | action-ide => G.ide-left
   | action-hom => G.*-assoc
+-}
