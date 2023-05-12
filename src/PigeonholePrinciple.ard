@@ -1,0 +1,187 @@
+\import Arith.Nat
+\import Data.Bool
+\import Data.List
+\import Equiv
+\import Equiv.Univalence
+\import Logic
+\import Logic.Meta
+\import Order.LinearOrder
+\import Paths
+\import Paths.Meta
+\import Prelude
+\import Relation.Equivalence
+\import Set
+\import definition
+
+\func QuotientList (A : \Set) => Quotient {List A} Perm
+
+\open Sort
+
+\func InvLengthPerm {A : \Set} {x y : List A} (P : Perm x y) : length x = length y \elim x, y, P
+  | nil, nil, perm-nil => idp
+  | x :: x1, y :: y1, perm-:: p P => pmap suc (InvLengthPerm P)
+  | x :: (x' :: x1), y :: (y' :: y1), perm-swap p p1 p2 => rewrite p2 idp
+  | x, y, perm-trans {zs} P1 P2 =>
+    \let A0 => InvLengthPerm P1 \in
+    \let A1 => InvLengthPerm P2 \in A0 *> A1
+
+-- Нужны какие-то лифты?
+\func LengthPerm {A : \Set} (L : QuotientList A) : Nat \elim L
+  | in~ a => length a
+  | ~-equiv x y r => InvLengthPerm r
+
+\func DecidablePred {A : \Type} (R : A -> A -> \Prop) : \Prop => \Pi (x y : A) -> Dec (R x y)
+
+
+-- инвариантно по перестановкам
+\data Multiplicity {A : DecSet} (a : A) (l : List A) (n : Nat) \elim l, n
+  | nil, 0 => nil-mult-0
+  | x :: xs, n => x-neq-a (x /= a) (Multiplicity a xs n)
+  | x :: xs, suc n => x-eq-a (x = a) (Multiplicity a xs n)
+
+\func multiplicity {A : DecSet} (a : A) (l : List A) : Nat \elim l
+  | nil => 0
+  | a1 :: l => \case decideEq a1 a \with {
+    | yes e => suc (multiplicity a l)
+    | no n => multiplicity a l
+  }
+
+\func Mult-is-mult {A : DecSet} {a : A} {l : List A} {n : Nat} (p : Multiplicity a l n) : multiplicity a l = n \elim l, n, p
+  | nil, 0, nil-mult-0 => idp
+  | x :: l, n, x-neq-a _x p => \case decideEq x a \as b \return (\case b \with { | yes _ => suc (multiplicity a l) | no n1 => multiplicity a l}) = n \with {
+    | yes e => contradiction
+    | no n1 => Mult-is-mult p
+  }
+  | x :: l, suc n, x-eq-a p p1 => \case decideEq x a \as b \return (\case b \with { | yes _ => suc (multiplicity a l) | no n1 => multiplicity a l}) = suc n \with {
+    | yes e => pmap suc (Mult-is-mult p1)
+    | no n1 => absurd (n1 p)
+  }
+
+\func mult-is-Mult {A : DecSet} {a : A} {l : List A} : Multiplicity a l (multiplicity a l) \elim l
+  | nil => nil-mult-0
+  | a1 :: l => \case decideEq a1 a \as b \return Multiplicity {A} a (a1 :: l) (\case b \with {
+  | yes _ => suc (multiplicity {A} a l)
+  | no _ => multiplicity {A} a l
+  }) \with {
+    | yes e => x-eq-a e (mult-is-Mult {A} {a} {l})
+    | no n => x-neq-a n (mult-is-Mult {A} {a} {l})
+  }
+
+\func mult-perm-inv {A : DecSet} {a : A} {l1 l2 : List A} (pr : Perm l1 l2) : multiplicity a l1 = multiplicity a l2 \elim l1, l2, pr
+  | nil, nil, perm-nil => idp
+  | x :: l1, y :: l2, perm-:: p pr => \case decideEq x a \as b, decideEq y a \as b1 \return (\case b \with {
+    | yes _ => suc (multiplicity {A} a l1)
+    | no _ => multiplicity {A} a l1
+  }) = (\case b1 \with {
+    | yes _ => suc (multiplicity {A} a l2)
+    | no _ => multiplicity {A} a l2
+  }) \with {
+    | yes e, yes e1 => pmap suc (mult-perm-inv pr)
+    | yes e, no n => contradiction
+    | no n, yes e => contradiction
+    | no n, no n1 => mult-perm-inv pr
+  }
+  | x :: (x' :: l1), y :: (y' :: l2), perm-swap p p1 p2 =>
+    \case decideEq x a \as b1, decideEq x' a \as b2, decideEq y a \as b3, decideEq y' a \as b4 \return  (\case b1 \with {
+      | yes _ => suc (\case b2 \with {
+        | yes _ => suc (multiplicity {A} a l1)
+        | no _ => multiplicity {A} a l1
+      })
+      | no _ => \case b2 \with {
+        | yes _ => suc (multiplicity {A} a l1)
+        | no _ => multiplicity {A} a l1
+      }
+    }) = (\case b3 \with {
+      | yes _ => suc (\case b4 \with {
+        | yes _ => suc (multiplicity {A} a l2)
+        | no _ => multiplicity {A} a l2
+      })
+      | no _ => \case b4 \with {
+        | yes _ => suc (multiplicity {A} a l2)
+        | no _ => multiplicity {A} a l2
+      }
+    }) \with {
+      | yes e, yes e1, yes e2, yes e3 => rewrite p2 idp
+      | yes e, yes e1, yes e2, no n => contradiction
+      | yes e, yes e1, no n, yes e2 => contradiction
+      | yes e, yes e1, no n, no n1 => contradiction
+      | yes e, no n, yes e1, yes e2 => contradiction
+      | yes e, no n, yes e1, no n1 => contradiction
+      | yes e, no n, no n1, yes e1 => rewrite p2 idp
+      | yes e, no n, no n1, no n2 => contradiction
+      | no n, yes e, yes e1, yes e2 => contradiction
+      | no n, yes e, yes e1, no n1 => rewrite p2 idp
+      | no n, no n1, yes e1, b4 => contradiction
+      | no n, yes e, no n1, b4 => contradiction
+      | no n, no n1, no n2, yes e1 => contradiction
+      | no n, no n1, no n2, no n3 => rewrite p2 idp
+    }
+  | l1, l2, perm-trans pr1 pr2 =>
+    \let A1 => mult-perm-inv {_} {a} pr1 \in
+    \let A2 => mult-perm-inv {_} {a} pr2 \in A1 *> A2
+
+\func Mult-l1-l2 {A : DecSet} {n : Nat} {l1 l2 : List A} {a : A} {pr : Perm l1 l2} (mul : Multiplicity a l1 n) : Multiplicity a l2 n
+  =>  \let mult-inv => inv (Mult-is-mult {A} {a} {l1} {n} mul) *> mult-perm-inv {A} {a} pr \in rewrite mult-inv (mult-is-Mult {A} {a} {l2})
+
+\func QuotientMultiplicity {A : DecSet} (x : A) (ql : QuotientList A) : Nat \elim ql
+  | in~ a => multiplicity x a
+  | ~-equiv x y r => mult-perm-inv r
+
+
+\func funExt {A : \Type} (B : A -> \Type) {f g : \Pi (a : A) -> B a}
+             (p : \Pi (a : A) -> f a = g a) : f = g
+  => path (\lam i => \lam a => p a @ i)
+
+\func NoDuplicates {A : DecSet} (ql : QuotientList A) : \Prop =>
+  \Pi (x : A) -> (QuotientMultiplicity x ql = 1) || (QuotientMultiplicity x ql = 0)
+
+\class ListedFiniteSet (A : DecSet)  {
+  | elems : QuotientList A
+  | nodup : NoDuplicates elems
+}
+
+\class FiniteType (A : DecSet) \extends BaseSet {
+  | enumeration : ListedFiniteSet A
+  | complete : \Pi (x : A) -> QuotientMultiplicity x enumeration.elems = 1
+}
+
+\func TypeToFin {A : DecSet} {FT : FiniteType A} (x : FT) : Fin (LengthPerm FT.enumeration.elems) =>
+  \let ft_sorted => {?}
+
+  \where \func helper {A : DecSet} {FT : FiniteType A} (l : List FT.enumeration) : Fin (LengthPerm FT.enumeration.elems) \elim l
+    | nil => {?}
+    | a :: l => helper FT l
+
+\instance FinTypeToFin {A : DecSet} {FT : FiniteType A} : QEquiv => \new QEquiv {
+  | A => FT
+  | B => Fin (LengthPerm FT.enumeration.elems)
+  | f => TypeToFin
+  | ret => {?}
+  | ret_f => {?}
+  | f_sec => {?}
+}
+
+\func finitetype-to-finn {A : DecSet} (fintype : FiniteType A)
+  : fintype = {\Set} Fin (LengthPerm fintype.enumeration.elems) => QEquiv-to-= FinTypeToFin
+
+\open NatSemiring
+\open LinearOrder \hiding (Dec)
+
+\func \infix 6 in {A : DecSet} (x : A) (B : ListedFiniteSet A) => QuotientMultiplicity x B.elems = 1
+
+\func pigeonhole_principle {A' B' : DecSet} {A : ListedFiniteSet A'} {B : ListedFiniteSet B'} {f : A' -> B'}
+  (hf : \Pi {x : A'} (x in A) -> f x in B )
+  {f_inj : \Pi {x1 x2 : A'} (x1 in A) (x2 in A) (f x1 = f x2) -> x1 = x2} : LengthPerm A.elems <= LengthPerm B.elems =>
+  \case LengthPerm A.elems \as lenA, LengthPerm B.elems \as lenB \return lenA <= lenB \with {
+    | 0, 0 => zero<=_
+    | 0, suc n => zero<=_
+    | suc n, 0 => {?}
+    | suc n, suc n1 => {?}
+  }
+
+\func pigeonhole_principle_fin {n m : Nat} (p : m < n) {f : Fin n -> Fin m} : \Sigma (x y : Fin n) (Not (x = y)) (f x = f y)
+  \elim n, m
+    | 0, 0 => absurd (<-irreflexive p)
+    | 0, Prelude.Nat.suc m => absurd (<-irreflexive (<-transitive zero<suc p))
+    | Prelude.Nat.suc n, 0 => {?}
+    | Prelude.Nat.suc n, Prelude.Nat.suc m => {?}

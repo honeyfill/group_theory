@@ -69,7 +69,11 @@
 \func Fin1ToPred (x : Fin 1) : \Sigma (x : two-FinGroup) (PredicateIn x) \elim x
   | 0 => (0, unit)
 
-\func mini-helper (x : \Sigma (p : two-FinGroup) (PredicateIn p)) : x = (0, unit) => {?}
+\func mini-helper (x : \Sigma (p : two-FinGroup) (PredicateIn p)) : x = (0, unit) => \case \elim x \with {
+  | (0, unit) => idp
+  | (1, p2) => absurd p2
+}
+
 
 \instance two-sub-eq : QEquiv => \new QEquiv {
   | A => \Sigma (p : two-FinGroup) (PredicateIn p)
