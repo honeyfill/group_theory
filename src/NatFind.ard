@@ -10,42 +10,42 @@
 \import Set
 \import Logic
 
-\func Nat-ind-helper (E : Nat -> \Prop)
+\func Nat-ind-helper (E : Nat -> \Type)
                      (r : \Pi (n : Nat) -> (\Pi (k : Nat) -> k NatSemiring.< n -> E k) -> E n)
                      {n k : Nat} (A : k NatSemiring.< suc n) : E k \elim n
   | 0 => \case \elim k, A \with {
     | 0, _ => r 0 (\lam k A => contradiction)
     | suc k1, A => absurd (suct<1 A)
   }
-  | suc n => \case T-suc A \with {
-    | byLeft p => Nat-ind-helper E r p
-    | byRight q => transport E (inv q) (r (suc n) (\lam k A => Nat-ind-helper E r A))
+  | suc n => \scase T-suc A \with {
+    | inl p => Nat-ind-helper E r p
+    | inr q => transport E (inv q) (r (suc n) (\lam k A => Nat-ind-helper E r A))
   }
   \where {
-    \func T-suc {n k : Nat} (A : k NatSemiring.< suc n) : k NatSemiring.< n || (k = n) \elim n
+    \func T-suc {n k : Nat} (A : k NatSemiring.< suc n) : k NatSemiring.< n `Or` (k = n) \elim n
       | 0 => \case \elim k, A : k NatSemiring.< 1 \with {
-        | 0, t => byRight idp
+        | 0, t => inr idp
         | suc k, t => absurd (suct<1 t)
       }
       | suc n => \case \elim k, A : k < suc (suc n) \with {
-        | 0, NatSemiring.zero<suc => byLeft NatSemiring.zero<suc
+        | 0, NatSemiring.zero<suc => inl NatSemiring.zero<suc
         | suc k1, NatSemiring.suc<suc _x => \case T-suc _x \with {
-          | byLeft a => byLeft (NatSemiring.suc<suc a)
-          | byRight b => byRight (pmap suc b)
+          | inl a => inl (NatSemiring.suc<suc a)
+          | inr b => inr (pmap suc b)
         }
       }
   }
 
-\func Nat-ind (E : Nat -> \Prop)
+\func Nat-ind (E : Nat -> \Type)
               (r : \Pi (n : Nat) -> (\Pi (k : Nat) -> k NatSemiring.< n -> E k) -> E n)
               (n : Nat) : E n => Nat-ind-helper E r id<suc
 
-\func helper-2 {P : Nat -> \Prop} {E : \Pi (n : Nat) -> Dec (P n)} (n : Nat) : (\Pi (k : Nat) -> k NatSemiring.< n -> P k -> TruncP (\Sigma (n : Nat) (P n) (\Pi (m : Nat) -> P m -> m >= n)))-> P n -> TruncP (\Sigma (n : Nat) (P n) (\Pi (m : Nat) -> P m -> m >= n))
+\func helper-2 {P : Nat -> \Prop} {E : \Pi (n : Nat) -> Dec (P n)} (n : Nat) : (\Pi (k : Nat) -> k NatSemiring.< n -> P k -> (\Sigma (n : Nat) (P n) (\Pi (m : Nat) -> P m -> m >= n)))-> P n -> (\Sigma (n : Nat) (P n) (\Pi (m : Nat) -> P m -> m >= n))
 \elim n
-  | 0 => \lam IH A0 => inP (0, A0, \lam _ _ => zero<=_)
-  | suc n => \lam IH AO => \case (nat_find.helper {P} {E} n) \with {
-    | byLeft (k, A0, A1) => IH k A0 A1
-    | byRight b => inP (suc n, AO, \lam m Pm m< => \let X => b m \in X m< Pm)
+  | 0 => \lam IH A0 => (0, A0, \lam _ _ => zero<=_)
+  | suc n => \lam IH AO => \scase (nat_find.helper {P} {E} n) \with {
+    | inl (k, A0, A1) => IH k A0 A1
+    | inr b => (suc n, AO, \lam m Pm m< => \let X => b m \in X m< Pm)
   }
 
 \func suct<1 {t : Nat} (p : suc t NatSemiring.< 1) : Empty \elim t
@@ -57,22 +57,22 @@
   | suc t => absurd (suct<1 p)
 
 \func nat_find {P : Nat -> \Prop} {E : \Pi (n : Nat) -> Dec (P n)} {n : Nat} (pn : P n)
-  : TruncP (\Sigma (n : Nat) (P n) (\Pi (m : Nat) -> P m -> m >= n)) =>
-  \let A => Nat-ind (\lam x => P x -> TruncP (\Sigma (n : Nat) (P n) (\Pi (m : Nat) -> P m -> m >= n)))
+  : \Sigma (n : Nat) (P n) (\Pi (m : Nat) -> P m -> m >= n) =>
+  \let A => Nat-ind (\lam x => P x -> (\Sigma (n : Nat) (P n) (\Pi (m : Nat) -> P m -> m >= n)))
       (\lam n1 => helper-2 {P} {E} n1)
 
   \in A n pn \where {
   \func helper {P : Nat -> \Prop} {E : \Pi (n : Nat) -> Dec (P n)} (n1 : Nat) :
-    (\Sigma (k : Nat) (k NatSemiring.< suc n1) (P k)) || (\Pi (k : Nat) -> (k NatSemiring.< suc n1) -> Not (P k)) \elim n1
+    (\Sigma (k : Nat) (k NatSemiring.< suc n1) (P k)) `Or` (\Pi (k : Nat) -> (k NatSemiring.< suc n1) -> Not (P k)) \elim n1
     | 0 => \case (E 0) \with {
-      | yes e => byLeft (0, NatSemiring.zero<suc, e)
-      | no n1 => byRight (\lam x x<1 => rewrite (x<1-eq x<1) n1)
+      | yes e => inl (0, NatSemiring.zero<suc, e)
+      | no n1 => inr (\lam x x<1 => rewrite (x<1-eq x<1) n1)
     }
     | suc n1 => \let IH => helper {P} {E} n1 \in \case (E (suc n1)) \with {
-      | yes e => byLeft (suc n1, id<suc {suc n1}, e)
+      | yes e => inl (suc n1, id<suc {suc n1}, e)
       | no A0 => \case IH \with {
-        | byLeft (k, A0, A1) => byLeft (k, NatSemiring.<-transitive A0 (id<suc {suc n1}), A1)
-        | byRight IH => byRight (\lam k p em => \let k<=suc => <_suc_<= p \in \case decideEq k (suc n1) \with {
+        | inl (k, A0, A1) => inl (k, NatSemiring.<-transitive A0 (id<suc {suc n1}), A1)
+        | inr IH => inr (\lam k p em => \let k<=suc => <_suc_<= p \in \case decideEq k (suc n1) \with {
           | yes e => A0 (rewrite (inv e) em)
           | no n2 => \case LinearOrder.<=-dec k<=suc \with {
             | inl a => IH k a em
@@ -82,11 +82,11 @@
       }
     }
 
-  \func helper-2 {P : Nat -> \Prop} {E : \Pi (n : Nat) -> Dec (P n)} (n : Nat) : (\Pi (k : Nat) -> k NatSemiring.< n -> P k -> TruncP (\Sigma (n : Nat) (P n) (\Pi (m : Nat) -> P m -> m >= n)))-> P n -> TruncP (\Sigma (n : Nat) (P n) (\Pi (m : Nat) -> P m -> m >= n))
+  \func helper-2 {P : Nat -> \Prop} {E : \Pi (n : Nat) -> Dec (P n)} (n : Nat) : (\Pi (k : Nat) -> k NatSemiring.< n -> P k -> (\Sigma (n : Nat) (P n) (\Pi (m : Nat) -> P m -> m >= n)))-> P n -> (\Sigma (n : Nat) (P n) (\Pi (m : Nat) -> P m -> m >= n))
   \elim n
-    | 0 => \lam IH A0 => inP (0, A0, \lam _ _ => zero<=_)
-    | suc n => \lam IH AO => \case (helper {P} {E} n) \with {
-      | byLeft (k, A0, A1) => IH k A0 A1
-      | byRight b => inP (suc n, AO, \lam m Pm m< => \let X => b m \in X m< Pm)
+    | 0 => \lam IH A0 => (0, A0, \lam _ _ => zero<=_)
+    | suc n => \lam IH AO => \scase (helper {P} {E} n) \with {
+      | inl (k, A0, A1) => IH k A0 A1
+      | inr b => (suc n, AO, \lam m Pm m< => \let X => b m \in X m< Pm)
     }
 }

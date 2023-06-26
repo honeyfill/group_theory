@@ -1,3 +1,4 @@
+\import Algebra.Domain.Euclidean
 \import Algebra.Group
 \import Algebra.Monoid
 \import Algebra.Pointed
@@ -17,6 +18,7 @@
 \import Order.StrictOrder
 \import Paths
 \import Paths.Meta
+\import Relation.Equivalence
 \import Set
 \import Set.Fin
 \import Logic
@@ -70,6 +72,9 @@
     }
   }
 
+\func lcosets-eq {G : FinGroup} {g h : G} {H : FinSubGroup G} {l-g : lcoset g H} {l-h : lcoset h H}
+  (p-eq : l-g.1 = l-h.1) :  lcoset g H = lcoset h H => {?}
+
 \class FinPartition {S : FinSet} {n : Nat} {
   | f : S -> Fin n
 
@@ -105,7 +110,7 @@
 \func order_is_periodic {G : FinGroup} {e : G.E} : periodic_point (G.* e) e (count_order G e) =>
  unfold (periodic_point, count_order) (unfold {?})
 
-\func order-is-order (G : FinGroup) (e : G.E) : order_e G e (count_order G e) =>
+\func order-is-order (G : FinGroup) (e : G.E) : is-order G e (count_order G e) =>
   (order_is_periodic, {?})
 
 \func decidedd {A : DecSet} {f : A -> A} {x : A} (n : Nat) : Dec (periodic_point f x n)
@@ -116,8 +121,14 @@
 
 \func pigeonhole_principle {G : FinGroup} {x : G} : \Sigma (n : Nat) (periodic_point (G.* x) x n) => {?}
 
-\func element_order {G : FinGroup} {n : Nat} (g : G)
-  => nat_find {periodic_point (G.* g) g} {decidedd {G} {G.* g} {g}} {n} pigeonhole_principle.2
+\func minimal_period {G : FinGroup}  (g : G) : Nat =>
+  \case nat_find {periodic_point (G.* g) g} {decidedd {G} {G.* g} {g}} pigeonhole_principle.2 \with {
+    | (n,p,_x) => n
+  }
+
+\func element_order {G : FinGroup} (g : G)
+  : \Sigma (n : Nat) (periodic_point (G.* g) g n) (\Pi (m : Nat) -> periodic_point (G.* g) g m -> m >= n)
+  => nat_find {periodic_point (G.* g) g} {decidedd {G} {G.* g} {g}} pigeonhole_principle.2
 
 \func test12 : periodic_point (\lam x => not x) true 2 => idp
 
@@ -194,9 +205,56 @@
 
 \class PGroup \extends FinGroup {
   | p : Nat
+  | order-pow : Nat
   | p-prime : isPrime p = true
-  | is-p-group : \Pi (g : FinGroup.E) -> \Sigma (n : Nat) (Group.pow g (p ^ n) = Group.ide)
+  | is-p-group : FinGroup.groupOrder = p ^ order-pow
 }
+
+\class SylowPGroup \extends FinSubGroup {
+  | is-p-sub : PGroup FinSubGroup.struct
+  | max-p : \Pi (H' : FinSubGroup G) (is-p-sub' : PGroup H') -> is-p-sub.order-pow >= is-p-sub'.order-pow
+}
+
+\class NormalSubgroup \extends FinSubGroup {
+  | is-normal {g : G} {n : FinSubGroup.struct} : P (g * n.1 * inverse g)
+}
+
+\func same-lcoset => {?}
+
+\func QuotientGroup {G : FinGroup} (H : FinSubGroup G) => Quotient {G} same-lcoset
+
+\func sylow_theorem {p : Nat} (G : FinGroup) (prime : isPrime p = true)
+  (divisor : G.groupOrder Nat.mod p = 0) : SylowPGroup \cowith
+  | G => G
+  | P => \lam x => {?}
+  | subgroupOrder => {?}
+  | EqFin => {?}
+  | contains-ide => {?}
+  | contains-comp => {?}
+  | is-p-sub => \new PGroup {
+    | ide => {?}
+    | * => {?}
+    | ide-left => {?}
+    | ide-right => {?}
+    | *-assoc => {?}
+    | inverse => {?}
+    | inverse-left => {?}
+    | inverse-right => {?}
+    | finCard => {?}
+    | finEq => {?}
+    | # => {?}
+    | #-irreflexive => {?}
+    | #-symmetric => {?}
+    | #-comparison => {?}
+    | tightness => {?}
+    | nonEqualApart => {?}
+    | G => {?}
+    | p => {?}
+    | order-pow => {?}
+    | p-prime => {?}
+    | is-p-group => {?}
+  }
+  | max-p => {?}
 
 \class HomG {G H : FinGroup} (f : G -> H) {
   | is-hom {g h : G} : f (g G.* h) = (f g) H.* (f h)

@@ -1,17 +1,17 @@
 \import Arith.Nat
-\import Data.Bool
 \import Data.List
 \import Equiv
 \import Equiv.Univalence
 \import Logic
 \import Logic.Meta
+\import Meta
 \import Order.LinearOrder
 \import Paths
 \import Paths.Meta
 \import Prelude
 \import Relation.Equivalence
 \import Set
-\import definition
+\import Set.Fin
 
 \func QuotientList (A : \Set) => Quotient {List A} Perm
 
@@ -26,7 +26,7 @@
     \let A1 => InvLengthPerm P2 \in A0 *> A1
 
 -- Нужны какие-то лифты?
-\func LengthPerm {A : \Set} (L : QuotientList A) : Nat \elim L
+\func quotientListLength {A : \Set} (L : QuotientList A) : Nat \elim L
   | in~ a => length a
   | ~-equiv x y r => InvLengthPerm r
 
@@ -34,7 +34,7 @@
 
 
 -- инвариантно по перестановкам
-\data Multiplicity {A : DecSet} (a : A) (l : List A) (n : Nat) \elim l, n
+\truncated \data Multiplicity {A : DecSet} (a : A) (l : List A) (n : Nat) : \Prop \elim l, n
   | nil, 0 => nil-mult-0
   | x :: xs, n => x-neq-a (x /= a) (Multiplicity a xs n)
   | x :: xs, suc n => x-eq-a (x = a) (Multiplicity a xs n)
@@ -123,7 +123,7 @@
 \func Mult-l1-l2 {A : DecSet} {n : Nat} {l1 l2 : List A} {a : A} {pr : Perm l1 l2} (mul : Multiplicity a l1 n) : Multiplicity a l2 n
   =>  \let mult-inv => inv (Mult-is-mult {A} {a} {l1} {n} mul) *> mult-perm-inv {A} {a} pr \in rewrite mult-inv (mult-is-Mult {A} {a} {l2})
 
-\func QuotientMultiplicity {A : DecSet} (x : A) (ql : QuotientList A) : Nat \elim ql
+\func quotientMultiplicity {A : DecSet} (x : A) (ql : QuotientList A) : Nat \elim ql
   | in~ a => multiplicity x a
   | ~-equiv x y r => mult-perm-inv r
 
@@ -133,46 +133,88 @@
   => path (\lam i => \lam a => p a @ i)
 
 \func NoDuplicates {A : DecSet} (ql : QuotientList A) : \Prop =>
-  \Pi (x : A) -> (QuotientMultiplicity x ql = 1) || (QuotientMultiplicity x ql = 0)
+  \Pi (x : A) -> (quotientMultiplicity x ql = 1) || (quotientMultiplicity x ql = 0)
 
 \class ListedFiniteSet (A : DecSet)  {
   | elems : QuotientList A
   | nodup : NoDuplicates elems
 }
 
-\class FiniteType (A : DecSet) \extends BaseSet {
-  | enumeration : ListedFiniteSet A
-  | complete : \Pi (x : A) -> QuotientMultiplicity x enumeration.elems = 1
+\class FiniteType \extends ListedFiniteSet {
+  | complete : \Pi (x : A) -> quotientMultiplicity x elems = 1
+  | nodup => \lam x => byLeft (complete x)
 }
 
-\func TypeToFin {A : DecSet} {FT : FiniteType A} (x : FT) : Fin (LengthPerm FT.enumeration.elems) =>
-  \let ft_sorted => {?}
-
-  \where \func helper {A : DecSet} {FT : FiniteType A} (l : List FT.enumeration) : Fin (LengthPerm FT.enumeration.elems) \elim l
-    | nil => {?}
-    | a :: l => helper FT l
-
-\instance FinTypeToFin {A : DecSet} {FT : FiniteType A} : QEquiv => \new QEquiv {
-  | A => FT
-  | B => Fin (LengthPerm FT.enumeration.elems)
-  | f => TypeToFin
-  | ret => {?}
+\func FT-func1 (n : Nat) (A : \Sigma (A : DecSet) (elems : List A) (le : length elems = n) (complete : \Pi (x : A) -> multiplicity x elems = 1))
+  :  Equiv {Fin n} {A.1} \cowith {
+  | f => f A.2 A.3
+  | ret => ret' A.2 A.3 A.4
   | ret_f => {?}
+  | sec => ret' A.2 A.3 A.4
   | f_sec => {?}
-}
+} \where {
 
-\func finitetype-to-finn {A : DecSet} (fintype : FiniteType A)
-  : fintype = {\Set} Fin (LengthPerm fintype.enumeration.elems) => QEquiv-to-= FinTypeToFin
+  \func f {n : Nat} {A : DecSet} (elems : List A) (pn : length elems = n) (x : Fin n) : A \elim n, elems, x
+    | suc n1, nil, 0 => contradiction
+    | suc n1, a :: elems, 0 => a
+    | suc n1, nil, suc x => contradiction
+    | suc n1, a :: elems, suc x => f elems (pmap pred pn) x
+
+  \func ret' {n : Nat} {A : DecSet} (elems : List A) (pn : length elems = n) (complete : \Pi (x : A) -> multiplicity x elems = 1) (x : A) : Fin n \elim n, elems
+    | 0, nil => contradiction
+    | 0, a :: elems => contradiction
+    | suc n1, nil => contradiction
+    | suc n1, a :: elems => indexOf {A} (a :: elems) x (complete x)
+
+  \func indexOf {A : DecSet} (elems : List A) (x : A) (complete : multiplicity x elems = 1) : Nat \elim elems
+    | nil => absurd (suc/=0 (inv complete))
+    | a :: elems => \case (decideEq a x) \as b, idp : b = decideEq a x  \with {
+      | yes e, t => 0
+      | no n1, t => suc (indexOf elems x (rewriteI (complete, t) idp))
+    }
+
+  \func indexOf_f {n : Nat} {A : DecSet} (elems : List A) (le : length elems = n) (complete : \Pi (x : A) -> multiplicity x elems = 1) (x : Fin n) :
+    indexOf elems (f elems le x) (complete (f elems le x)) = x \elim n, elems, x
+    | suc n1, nil, 0 => contradiction
+    | suc n1, a :: elems, 0 => \case (decideEq a a) \as b, idp : b  = decideEq a a \return
+      (\case b, {?} \with {
+      | yes e, _ => 0
+      | no n2, t => suc (indexOf {A} elems a (transport {Nat} ((=) (multiplicity {A} a elems)) {\case b \with {
+        | yes _ => suc (multiplicity {A} a elems)
+        | no _ => multiplicity {A} a elems
+      }} {1} ({?}) (transport {Dec (a = a)} (\lam (x0 : Dec (a = a)) => multiplicity {A} a elems = (\case x0 \with {
+        | yes _ => suc (multiplicity {A} a elems)
+        | no _ => multiplicity {A} a elems
+      })) {no {a = f {suc n1} {A} (a :: elems) le 0} n2} {A.decideEq a a} t (idp {Nat} {multiplicity {A} a elems}))))
+    }) = 0  \with {
+      | yes e, p => {?}
+      | no n2, p => {?}
+    }
+    | suc n1, nil, suc x => contradiction
+    | suc n1, a :: elems, suc x => {?}
+
+}
+-- A; elems : List A; complete; n => length elems =====> QEquiv (Fin n) A ====> Fin n = A
+-- Fin n -> A ;  k < n |-> elems[k]
+-- A -> Fin n ;  a : A => indexOf(a, elems)
+
+-- (elems : A) P
+-- Quotient (\Sigma (elems : List A) complete X) = Sigma (elems : Quotient (List A)) (complete
+
+\func FT-func2 (A : DecSet) (n : Nat) (elems : QuotientList A) (ql : quotientListLength elems = n) (complete : \Pi (x : A) -> quotientMultiplicity x elems = 1) : TruncP (Fin n = A) \elim elems
+  | in~ a => inP (Equiv-to-= {Fin n} {A} (FT-func1 n (A, a, ql, complete)))
+
+
 
 \open NatSemiring
 \open LinearOrder \hiding (Dec)
 
-\func \infix 6 in {A : DecSet} (x : A) (B : ListedFiniteSet A) => QuotientMultiplicity x B.elems = 1
+\func \infix 6 in {A : DecSet} (x : A) (B : ListedFiniteSet A) => quotientMultiplicity x B.elems = 1
 
 \func pigeonhole_principle {A' B' : DecSet} {A : ListedFiniteSet A'} {B : ListedFiniteSet B'} {f : A' -> B'}
   (hf : \Pi {x : A'} (x in A) -> f x in B )
-  {f_inj : \Pi {x1 x2 : A'} (x1 in A) (x2 in A) (f x1 = f x2) -> x1 = x2} : LengthPerm A.elems <= LengthPerm B.elems =>
-  \case LengthPerm A.elems \as lenA, LengthPerm B.elems \as lenB \return lenA <= lenB \with {
+  {f_inj : \Pi {x1 x2 : A'} (x1 in A) (x2 in A) (f x1 = f x2) -> x1 = x2} : quotientListLength A.elems <= quotientListLength B.elems =>
+  \case quotientListLength A.elems \as lenA, quotientListLength B.elems \as lenB \return lenA <= lenB \with {
     | 0, 0 => zero<=_
     | 0, suc n => zero<=_
     | suc n, 0 => {?}
@@ -182,6 +224,6 @@
 \func pigeonhole_principle_fin {n m : Nat} (p : m < n) {f : Fin n -> Fin m} : \Sigma (x y : Fin n) (Not (x = y)) (f x = f y)
   \elim n, m
     | 0, 0 => absurd (<-irreflexive p)
-    | 0, Prelude.Nat.suc m => absurd (<-irreflexive (<-transitive zero<suc p))
-    | Prelude.Nat.suc n, 0 => {?}
-    | Prelude.Nat.suc n, Prelude.Nat.suc m => {?}
+    | 0, suc m => absurd (<-irreflexive (<-transitive zero<suc p))
+    | suc n, 0 => {?}
+    | suc n, suc m => {?}
